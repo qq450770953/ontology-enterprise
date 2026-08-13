@@ -123,6 +123,20 @@ ontology-enterprise/
 - 设计对齐企业级 Ontology Runtime 参考架构（Object / Link / State / Method / Action / Policy-Audit 六能力分层）。
 - 可与 LLM Wiki / RAG 组合：Wiki 沉淀稳定认识，本工具提供机器可用的结构化语义层与受治理动作。
 
+## 设计来源
+
+本仓库是架构设计 **[wiki-ontology-agent-architecture](https://github.com/qq450770953/wiki-ontology-agent-architecture)** 的**可运行参考实现**（设计文档 → 实现能力映射详见该仓库 docs/architecture.md §11.1）。核心对应：
+
+| 架构设计概念 | 本实现能力 |
+|---|---|
+| 语义层：Ontology 实体 / 别名 / 关系 / 约束 | `type define` + `object` + `link`（基数、环检测）+ `object alias-add/resolve` |
+| 治理层：口径版本 / 约束校验 / 状态机 | `state` 状态机 + `method` 确定性沙箱 + schema 校验 |
+| 执行层：受治理动作（前置条件 / 权限 / 幂等） | `action register/run` + `policy`（RBAC） |
+| 知识复利：固化写回 / 版本失效 | SQLite 追加式状态 + 实体 `supersedes_id` / status 失效机制 |
+| 治理层：审计 / 血缘 | `audit` + `lineage` |
+
+该设计方案的六层架构（入口路由 / 知识层 / 语义层 / 执行层 / 接入层 / 治理层）与"双路径 + 知识复利"闭环，是本仓库能力设计的依据；本仓库聚焦其中"语义层 + 执行层 + 治理层"的可运行底座。
+
 ## License
 
 MIT
