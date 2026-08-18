@@ -306,6 +306,65 @@ class TestGovernance:
 
 
 # ---------------------------------------------------------------------------
+# 7. Lesson (experience learning)
+# ---------------------------------------------------------------------------
+
+class TestLesson:
+    def _setup(self, db):
+        db.define_type("Lesson", {
+            "schema": {"required": ["action", "context", "outcome", "insight"], "properties": {
+                "action": {"type": "string"},
+                "context": {"type": "string"},
+                "outcome": {"type": "string", "enum": ["positive", "negative"]},
+                "insight": {"type": "string"},
+                "area": {"type": "string"},
+                "ref_id": {"type": "string"},
+            }},
+            "relations": {
+                "learned_from": {"from_types": ["Lesson"], "to_types": ["Person", "Task"]},
+            },
+        }, "a", "admin")
+
+    def test_record_and_get(self, db):
+        self._setup(db)
+        ent = db.record_lesson("docker compose up", "port 3000 occupied", "negative",
+                               "check port before start", area="dev", actor="a", role="admin")
+        assert ent["type"] == "Lesson"
+        assert ent["properties"]["outcome"] == "negative"
+        assert ent["properties"]["area"] == "dev"
+        assert ent["properties"]["insight"].startswith("check")
+
+    def test_outcome_enum_enforced(self, db):
+        self._setup(db)
+        with pytest.raises(OntologyError, match="must be one of"):
+            db.record_lesson("x", "y", "meh", "z", actor="a", role="admin")
+
+    def test_query_by_outcome_and_area(self, db):
+        self._setup(db)
+        db.record_lesson("a1", "ctx", "negative", "i1", area="dev", actor="a", role="admin")
+        db.record_lesson("a2", "ctx", "positive", "i2", area="wiki", actor="a", role="admin")
+        db.record_lesson("a3", "ctx", "positive", "i3", area="dev", actor="a", role="admin")
+        neg = db.query_lessons(outcome="negative", actor="a", role="admin")
+        assert len(neg) == 1 and neg[0]["properties"]["action"] == "a1"
+        dev_pos = db.query_lessons(outcome="positive", area="dev", actor="a", role="admin")
+        assert len(dev_pos) == 1 and dev_pos[0]["properties"]["action"] == "a3"
+
+    def test_lesson_relates_to_entity(self, db):
+        self._setup(db)
+        p = db.create_entity("Person", {"name": "Alice"}, "a", "admin")
+        ent = db.record_lesson("deploy", "prod incident", "negative", "rollback first",
+                               ref_id=p["id"], actor="a", role="admin")
+        rels = db.related(ent["id"], "learned_from", "outgoing")
+        assert rels[0]["to_id"] == p["id"]
+
+    def test_lesson_audit_recorded(self, db):
+        self._setup(db)
+        db.record_lesson("x", "y", "negative", "z", actor="alice", role="admin")
+        rows = db.audit_query(actor_filter="alice")
+        assert any(r["op"] == "entity_create" and r["target_type"] == "Lesson" for r in rows)
+
+
+# ---------------------------------------------------------------------------
 # Version & effective dates
 # ---------------------------------------------------------------------------
 

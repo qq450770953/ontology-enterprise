@@ -30,6 +30,8 @@ Relation: { from_id, relation_type, to_id, properties }
 | "检查用户是否有写权限" | `policy check` |
 | "这个报表数据来自哪里" | `lineage trace` |
 | "华东区指的是哪个实体" | `object resolve` |
+| "记录一条经验/踩坑教训/最佳实践" | `lesson record` |
+| "我踩过哪些坑？这个领域的教训" | `lesson query` |
 
 ## 快速开始
 
@@ -51,7 +53,7 @@ python3 scripts/ontology_enterprise.py --root ./ontology --actor alice --role op
 
 > 注意：`--root/--actor/--role` 必须放在子命令之前；`--id` 使用 create 返回的真实 ID（脚本示例中的 p_001 为占位）。
 
-## 六大能力
+## 七大能力
 
 ### 1. Object 对象
 
@@ -91,6 +93,13 @@ python3 scripts/ontology_enterprise.py --root ./ontology --actor alice --role op
 - `audit query --actor X [--target-id Y]`：审计日志（谁/何时/做了什么/结果）。
 - `lineage add --child X --parent Y [--rel derived_from]` + `lineage trace --id X`：数据血缘追溯。
 
+### 7. Lesson 经验沉淀（Learn from experience）
+
+- `lesson record --action X --context Y --outcome positive|negative --insight Z [--area A] [--ref-id E] [--source S]`：沉淀一条经验教训（四元组：做了什么/在什么场景/结果/学到的），可选 `area` 领域标签与 `ref-id` 关联实体（自动建 `learned_from` 关系）。
+- `lesson query [--outcome X] [--area Y]`：按结果或领域检索经验库，供会话开始时加载相关教训。
+- 与 `object create --type Lesson` 等价但语义化；支持类型约束（outcome 枚举校验）、RBAC、审计与血缘全部治理。
+- 默认 bootstrap 已注册 `Lesson` 类型；已有库可用 `type define --name Lesson --definition '{...}'` 补充。
+
 ## 权限模型（默认引导策略）
 
 | 角色 | 能力 |
@@ -102,13 +111,28 @@ python3 scripts/ontology_enterprise.py --root ./ontology --actor alice --role op
 
 所有变更操作（create/update/delete/relate/transition/method/action/policy）都通过 `require_policy` 强制执行 RBAC；未授权操作抛 `policy denied`。
 
-## 安全边界
+- 安全边界
+  - 存储：SQLite 于 `--root`（默认 `memory/ontology/ontology.db`），事务 + 并发安全；root 默认限制在工作区内。
+  - Method 沙箱：白名单内置函数、AST 校验、禁止导入与 IO。
+  - Action 副作用：仅在注册时声明的 `side_effect` 字段范围内修改实体，且重新过类型校验。
+  - 审计不可绕过：所有变更写 `audit_log`。
+  - 凭据：Credential 类对象只存引用（`secret_ref`），禁止直接存密码/token。
 
-- 存储：SQLite 于 `--root`（默认 `memory/ontology/ontology.db`），事务 + 并发安全；root 默认限制在工作区内。
-- Method 沙箱：白名单内置函数、AST 校验、禁止导入与 IO。
-- Action 副作用：仅在注册时声明的 `side_effect` 字段范围内修改实体，且重新过类型校验。
-- 审计不可绕过：所有变更写 `audit_log`。
-- 凭据：Credential 类对象只存引用（`secret_ref`），禁止直接存密码/token。
+## 经验沉淀协议（会话记忆）
+
+借鉴 Agent Memory 的会话记忆模式，将"踩过的坑"沉淀为可检索、可关联、带血缘的资产：
+
+```text
+会话开始 (session start):
+  1. lesson query --area <当前任务领域>     → 加载近期相关教训
+  2. object query --type <实体>             → 检查实体上下文
+  3. 结合教训与上下文开始任务
+
+会话结束 (session end):
+  1. 从对话提取持久事实 → 按现有落库流程入库
+  2. 沉淀经验 → lesson record --action ... --outcome positive|negative --insight ...
+  3. 更新相关实体信息 → object update
+```
 
 ## 参考文档
 
@@ -122,4 +146,4 @@ python3 scripts/ontology_enterprise.py --root ./ontology --actor alice --role op
 python3 -m pytest tests/ -v
 ```
 
-覆盖：对象 CRUD/约束、关系基数与环检测、状态机合法/非法流转、Method 沙箱与安全拦截、Action 权限/前置条件/幂等/副作用、Policy 放行与拒绝、审计查询、血缘追踪、别名消歧、版本与生效时间。
+覆盖：对象 CRUD/约束、关系基数与环检测、状态机合法/非法流转、Method 沙箱与安全拦截、Action 权限/前置条件/幂等/副作用、Policy 放行与拒绝、审计查询、血缘追踪、别名消歧、版本与生效时间、Lesson 经验沉淀（record/query/枚举校验/实体关联/审计）。

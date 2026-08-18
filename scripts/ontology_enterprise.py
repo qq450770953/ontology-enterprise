@@ -741,6 +741,33 @@ class OntologyDB:
             chain.extend(self.lineage_trace(p["parent_id"], visited))
         return chain
 
+    # --- Lesson capability (learn from experience) ---
+
+    def record_lesson(self, action, context, outcome, insight, area=None, ref_id=None,
+                      actor="system", role="admin", source=None):
+        """Persist a lesson learned: action/context/outcome/insight (+ optional area & entity ref).
+
+        Outcome must be 'positive' or 'negative' (schema enum enforced).
+        Optional ref_id links the lesson to a related entity via learned_from relation.
+        """
+        props = {"action": action, "context": context, "outcome": outcome, "insight": insight}
+        if area:
+            props["area"] = area
+        if ref_id:
+            props["ref_id"] = ref_id
+        ent = self.create_entity("Lesson", props, actor, role, source=source)
+        if ref_id:
+            self.relate(ent["id"], "learned_from", ref_id, actor=actor, role=role)
+        return ent
+
+    def query_lessons(self, outcome=None, area=None, actor="system", role="admin"):
+        where = {}
+        if outcome:
+            where["outcome"] = outcome
+        if area:
+            where["area"] = area
+        return self.query_entities("Lesson", where or None, actor, role)
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -817,6 +844,13 @@ def main(argv=None):
     lg_add = lg_.add_parser("add"); lg_add.add_argument("--child", required=True); lg_add.add_argument("--parent", required=True); lg_add.add_argument("--rel", default="derived_from")
     lg_trace = lg_.add_parser("trace"); lg_trace.add_argument("--id", required=True)
 
+    p = sub.add_parser("lesson", help="experience lessons (learn from actions)")
+    le_ = p.add_subparsers(dest="op")
+    le_rec = le_.add_parser("record"); le_rec.add_argument("--action", required=True)
+    le_rec.add_argument("--context", required=True); le_rec.add_argument("--outcome", required=True, choices=["positive", "negative"])
+    le_rec.add_argument("--insight", required=True); le_rec.add_argument("--area"); le_rec.add_argument("--ref-id"); le_rec.add_argument("--source")
+    le_q = le_.add_parser("query"); le_q.add_argument("--outcome"); le_q.add_argument("--area")
+
     p = sub.add_parser("init", help="initialize default types + bootstrap policies")
 
     args = parser.parse_args(argv)
@@ -875,6 +909,12 @@ def main(argv=None):
                 out(db.lineage_add(args.child, args.parent, args.rel, args.actor))
             elif args.op == "trace":
                 out(db.lineage_trace(args.id))
+        elif args.cmd == "lesson":
+            if args.op == "record":
+                out(db.record_lesson(args.action, args.context, args.outcome, args.insight,
+                                     args.area, args.ref_id, args.actor, args.role, args.source))
+            elif args.op == "query":
+                out(db.query_lessons(args.outcome, args.area, args.actor, args.role))
         else:
             parser.print_help()
         db.conn.commit()
@@ -1020,6 +1060,22 @@ def bootstrap(db):
                     "effective_from": {"type": "string"},
                 },
             }
+        },
+        "Lesson": {
+            "schema": {
+                "required": ["action", "context", "outcome", "insight"],
+                "properties": {
+                    "action": {"type": "string"},
+                    "context": {"type": "string"},
+                    "outcome": {"type": "string", "enum": ["positive", "negative"]},
+                    "insight": {"type": "string"},
+                    "area": {"type": "string"},
+                    "ref_id": {"type": "string"},
+                },
+            },
+            "relations": {
+                "learned_from": {"from_types": ["Lesson"], "to_types": ["Person", "Project", "Task", "Event", "Document", "Metric", "Lesson"]},
+            },
         },
     }
     for name, definition in types.items():

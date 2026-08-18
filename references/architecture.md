@@ -13,6 +13,7 @@ Ontology Enterprise Runtime
   ├─ State    类型状态机 + 合法流转校验
   ├─ Method   确定性只读业务逻辑（白名单沙箱）
   ├─ Action   受治理动作（前置条件/角色/幂等/副作用）
+  ├─ Lesson   经验教训沉淀（action/context/outcome/insight + 领域 + 关联）
   └─ Policy / Audit / Lineage   RBAC + 审计 + 血缘
   ↓
 SQLite（memory/ontology/ontology.db）— 事务 + 并发安全
@@ -76,6 +77,13 @@ SQLite（memory/ontology/ontology.db）— 事务 + 并发安全
 
 - `lineage(child_id, parent_id, rel_type)`：派生关系有向边。
 - `lineage trace` 递归回溯父链，防止环（visited 集合）。
+
+## Lesson 经验模型
+
+- 四元组：`action`（做了什么）/ `context`（场景）/ `outcome`（positive|negative）/ `insight`（学到的）。
+- 可选 `area` 领域标签（如 dev/wiki/ops），`ref_id` + `learned_from` 关系关联到相关实体。
+- 复用完整治理链：类型约束（outcome 枚举）→ RBAC → 审计 → 血缘，可跨会话检索。
+- 配套会话协议：session start 加载领域教训，session end 沉淀新教训（见 SKILL.md）。
 
 ## 已知边界
 
